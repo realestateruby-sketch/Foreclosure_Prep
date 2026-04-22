@@ -481,6 +481,36 @@ def parse_money(val):
     except ValueError:
         return None
 
+def split_borrower_name(df: pd.DataFrame) -> pd.DataFrame:
+    borrower_col = None
+    for c in df.columns:
+        if str(c).strip().upper() in ("BORROWER", "BORROWERS", "BORROWER NAME"):
+            borrower_col = c
+            break
+    if borrower_col is None:
+        return df
+
+    first_names = []
+    last_names = []
+    for val in df[borrower_col]:
+        if pd.isna(val) or str(val).strip() == "":
+            first_names.append(None)
+            last_names.append(None)
+            continue
+        parts = str(val).strip().split()
+        if len(parts) == 1:
+            first_names.append(parts[0])
+            last_names.append(None)
+        else:
+            last_names.append(parts[0].rstrip(","))
+            first_names.append(" ".join(parts[1:]))
+
+    insert_at = df.columns.get_loc(borrower_col)
+    df.drop(columns=[borrower_col], inplace=True)
+    df.insert(insert_at, "Last Name", last_names)
+    df.insert(insert_at, "First Name", first_names)
+    return df
+
 def clean_columns(df: pd.DataFrame) -> pd.DataFrame:
     drop_cols = [c for c in df.columns if should_delete_column(c)]
     return df.drop(columns=drop_cols, errors="ignore")
@@ -592,6 +622,7 @@ def write_multi_tab_xlsx(main_df, chfa_df, county_tabs) -> bytes:
 
 def run_locked_pipeline(df: pd.DataFrame):
     df = clean_columns(df)
+    df = split_borrower_name(df)
 
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing:

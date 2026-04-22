@@ -1,0 +1,240 @@
+import streamlit as st
+import pandas as pd
+import re
+from io import BytesIO
+
+# =========================
+# Locked Pipeline Constants
+# =========================
+CHFA_LENDER = "COLO HOUSING FIN AUTHORITY"
+
+DELETE_HEADERS_CONTAINS = [
+    "TDD DATE", "TDR", "ERECOMLS", "ATTY", "LEGAL", "REC#", "BK", "PG", "DOC",
+    "RECORDING", "Y=IND N=BUS", "PUBLIC TRUSTEE", "PARCEL NO", "OWNER OCC"
+]
+
+REQUIRED_COLUMNS = ["Orig Loan Amt", "Loan Amt", "Lender", "Cnty"]
+
+# =========================
+# Helpers (Conversion Workflow)
+# =========================
+def should_delete_column(col: str) -> bool:
+    col_u = str(col).strip().upper()
+
+    # Never delete Property Address
+    if "PROPERTY ADDRESS" in col_u:
+        return False
+
+    # Delete any SKLD column
+    if "SKLD" in col_u:
+        return True
+
+    # Delete token-based columns
+    return any(token in col_u for token in DELETE_HEADERS_CONTAINS)
+
+_money_re = re.compile(r"[^0-9\.\-]")
+
+def parse_money(val):
+    """Return float or None. Handles '$', ',', text numbers, blanks."""
+    if pd.isna(val):
+        return None
+    if isinstance(val, (int, float)):
+        return float(val)
+    s = _money_re.sub("", str(val).strip())
+    if s in ("", "-", ".", "-."):
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+def clean_columns(df: pd.DataFrame) -> pd.DataFrame:
+    drop_cols = [c for c in df.columns if should_delete_column(c)]
+    return df.drop(columns=drop_cols, errors="ignore")
+
+def compute_difference_hard_values(
+    df: pd.DataFrame,
+    orig_col="Orig Loan Amt",
+    loan_col="Loan Amt",
+    diff_col="Difference"
+) -> pd.DataFrame:
+    if orig_col not in df.columns or loan_col not in df.columns:
+        raise ValueError("Missing Orig Loan Amt and/or Loan Amt columns")
+
+    diffs = []
+    for _, row in df.iterrows():
+        o = parse_money(row[orig_col])
+        l = parse_money(row[loan_col])
+        diffs.append((o - l) if (o is not None and l is not None) else None)
+
+    # Insert Difference next to Orig Loan Amt (or overwrite if it already exists)
+    if diff_col in df.columns:
+        df[diff_col] = diffs
+        return df
+
+    insert_at = df.columns.get_loc(orig_col) + 1
+    df.insert(insert_at, diff_col, diffs)
+    return df
+
+def extract_chfa(df: pd.DataFrame, lender_col="Lender"):
+    if lender_col not in df.columns:
+        raise ValueError("Missing Lender column (needed for CHFA split)")
+    chfa_df = df[df[lender_col] == CHFA_LENDER].copy()
+    main_df = df[df[lender_col] != CHFA_LENDER].copy()
+    return main_df, chfa_df
+
+def make_county_tabs(df: pd.DataFrame, county_col="Cnty") -> dict:
+    if county_col not in df.columns:
+        raise ValueError("Missing Cnty column (needed for county tabs)")
+    tabs = {}
+    for cnty, grp in df.groupby(county_col, dropna=True):
+        if pd.isna(cnty):
+            continue
+        name = str(cnty).strip()
+        if not name:
+            continue
+        tabs[name[:31]] = grp.copy()
+    return tabs
+
+def validate_difference(
+    df: pd.DataFrame,
+    orig_col="Orig Loan Amt",
+    loan_col="Loan Amt",
+    diff_col="Difference",
+    tol=0.01
+) -> int:
+    """Returns number of bad rows where Difference != Orig - Loan."""
+    if df is None or df.empty:
+        return 0
+
+    bad = 0
+    for _, row in df.iterrows():
+        o = parse_money(row.get(orig_col))
+        l = parse_money(row.get(loan_col))
+        d = parse_money(row.get(diff_col))
+        if o is None or l is None:
+            continue
+        expected = o - l
+        if d is None or abs(d - expected) > tol:
+            bad += 1
+    return bad
+
+def write_multi_tab_xlsx(main_df, chfa_df, county_tabs) -> bytes:
+    """Returns XLSX bytes for download."""
+    output = BytesIO()
+
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        workbook = writer.book
+        money_fmt = workbook.add_format({"num_format": "$#,##0.00"})
+        neg_fmt = workbook.add_format({"num_format": "$#,##0.00", "font_color": "red", "bold": True})
+
+        def format_sheet(sheet_name: str, df: pd.DataFrame):
+            ws = writer.sheets[sheet_name]
+            ws.freeze_panes(1, 0)
+
+            # Auto-size columns
+            for i, col in enumerate(df.columns):
+                try:
+                    max_len = max(df[col].astype(str).map(len).max(), len(str(col)))
+                except Exception:
+                    max_len = len(str(col))
+                ws.set_column(i, i, min(max_len + 2, 50))
+
+            # Format Difference column
+            if "Difference" in df.columns:
+                idx = df.columns.get_loc("Difference")
+                ws.set_column(idx, idx, 14, money_fmt)
+                ws.conditional_format(
+                    1, idx, len(df), idx,
+                    {"type": "cell", "criteria": "<", "value": 0, "format": neg_fmt}
+                )
+
+        # Main sheet
+        main_df.to_excel(writer, sheet_name="Main", index=False)
+        format_sheet("Main", main_df)
+
+        # CHFA sheet
+        if chfa_df is not None and not chfa_df.empty:
+            chfa_df.to_excel(writer, sheet_name="CHFA", index=False)
+            format_sheet("CHFA", chfa_df)
+
+        # County tabs
+        for name, tab_df in county_tabs.items():
+            tab_df.to_excel(writer, sheet_name=name, index=False)
+            format_sheet(name, tab_df)
+
+    return output.getvalue()
+
+def run_locked_pipeline(df: pd.DataFrame):
+    """End-to-end: clean columns -> compute difference -> CHFA split -> county tabs -> validate -> bytes"""
+    # Clean columns
+    df = clean_columns(df)
+
+    # Validate required columns exist
+    missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns: {', '.join(missing)}")
+
+    # Difference (hard values)
+    df = compute_difference_hard_values(df)
+
+    # CHFA (true move)
+    main_df, chfa_df = extract_chfa(df)
+
+    # County tabs (from remaining main rows)
+    county_tabs = make_county_tabs(main_df)
+
+    # Validate math on every “sheet”
+    bad = 0
+    bad += validate_difference(main_df)
+    bad += validate_difference(chfa_df)
+    bad += sum(validate_difference(t) for t in county_tabs.values())
+
+    if bad > 0:
+        raise RuntimeError(f"Validation failed: {bad} rows have incorrect Difference math.")
+
+    # Produce XLSX bytes
+    xlsx_bytes = write_multi_tab_xlsx(main_df, chfa_df, county_tabs)
+    return xlsx_bytes, main_df, chfa_df, county_tabs
+
+# =========================
+# Streamlit UI
+# =========================
+st.set_page_config(page_title="NED Cleaner (Locked)", layout="centered")
+
+st.title("NED Foreclosure Cleaner (Locked Pipeline)")
+st.write("Upload a raw XLSX → download a cleaned, multi-tab XLSX (hard-value Difference + validation).")
+
+uploaded = st.file_uploader("Upload XLSX file", type=["xlsx"])
+
+if uploaded:
+    try:
+        # Read first sheet by default
+        df = pd.read_excel(uploaded)
+
+        with st.spinner("Processing file..."):
+            xlsx_bytes, main_df, chfa_df, county_tabs = run_locked_pipeline(df)
+
+        st.success("Done. Your cleaned XLSX is ready.")
+
+        # Quick stats preview
+        st.write("### Summary")
+        st.write(f"- Main rows: **{len(main_df)}**")
+        st.write(f"- CHFA rows: **{0 if chfa_df is None else len(chfa_df)}**")
+        st.write(f"- County tabs created: **{len(county_tabs)}**")
+
+        st.download_button(
+            label="Download cleaned XLSX",
+            data=xlsx_bytes,
+            file_name="cleaned_foreclosure_list.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        # Optional: preview top rows
+        with st.expander("Preview (first 25 rows of Main)"):
+            st.dataframe(main_df.head(25))
+
+    except Exception as e:
+        st.error("Processing failed.")
+        st.code(str(e))
+        st.stop()

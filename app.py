@@ -499,11 +499,11 @@ def split_borrower_name(df: pd.DataFrame) -> pd.DataFrame:
             continue
         parts = str(val).strip().split()
         if len(parts) == 1:
-            first_names.append(parts[0])
+            first_names.append(parts[0].title())
             last_names.append(None)
         else:
-            last_names.append(parts[0].rstrip(","))
-            first_names.append(" ".join(parts[1:]))
+            last_names.append(parts[0].rstrip(",").title())
+            first_names.append(" ".join(parts[1:]).title())
 
     insert_at = df.columns.get_loc(borrower_col)
     df.drop(columns=[borrower_col], inplace=True)

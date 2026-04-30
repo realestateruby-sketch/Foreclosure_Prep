@@ -502,13 +502,13 @@ def split_borrower_name(df: pd.DataFrame) -> pd.DataFrame:
             first_names.append(parts[0].title())
             last_names.append(None)
         else:
-            last_names.append(parts[0].rstrip(",").title())
-            first_names.append(" ".join(parts[1:]).title())
+            first_names.append(parts[0].rstrip(",").title())
+            last_names.append(" ".join(parts[1:]).title())
 
     insert_at = df.columns.get_loc(borrower_col)
     df.drop(columns=[borrower_col], inplace=True)
-    df.insert(insert_at, "First Name", first_names)
     df.insert(insert_at, "Last Name", last_names)
+    df.insert(insert_at, "First Name", first_names)
     return df
 
 def clean_columns(df: pd.DataFrame) -> pd.DataFrame:

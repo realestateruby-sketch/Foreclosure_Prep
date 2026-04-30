@@ -1,7 +1,7 @@
 [project]
-name = "repl-nix-workspace"
+name = "foreclosure-prep"
 version = "0.1.0"
-description = "Add your description here"
+description = "Foreclosure Prep — Colorado foreclosure data SaaS"
 requires-python = ">=3.11"
 dependencies = [
     "openpyxl>=3.1.5",

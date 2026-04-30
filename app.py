@@ -105,11 +105,24 @@ st.markdown("""
     }
 
     .brand-icon {
-        width: 52px;
-        height: 52px;
-        border-radius: 14px;
+        width: 52px !important;
+        height: 52px !important;
+        min-width: 52px;
+        min-height: 52px;
+        border-radius: 12px;
         flex-shrink: 0;
+        overflow: hidden;
+        display: inline-block;
+        background: #311A6C;
+    }
+    .brand-icon img {
+        width: 100% !important;
+        height: 100% !important;
+        max-width: none !important;
+        max-height: none !important;
         object-fit: cover;
+        display: block;
+        border-radius: 0;
     }
 
     .brand-name {
@@ -654,7 +667,7 @@ def render_header():
     st.markdown(f"""
     <div class="brand-header">
         <a class="brand-link" href="?page=home">
-            <img class="brand-icon" src="{LOGO_DATA_URI}" alt="Foreclosure Prep" />
+            <span class="brand-icon"><img src="{LOGO_DATA_URI}" alt="Foreclosure Scope" /></span>
             <div class="brand-name">
                 <span class="dark">Foreclosure </span><span class="purple">Scope</span>
             </div>

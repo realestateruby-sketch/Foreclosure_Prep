@@ -656,7 +656,7 @@ def render_header():
         <a class="brand-link" href="?page=home">
             <img class="brand-icon" src="{LOGO_DATA_URI}" alt="Foreclosure Prep" />
             <div class="brand-name">
-                <span class="dark">Foreclosure </span><span class="purple">Prep</span>
+                <span class="dark">Foreclosure </span><span class="purple">Scope</span>
             </div>
         </a>
         <div class="nav-buttons">

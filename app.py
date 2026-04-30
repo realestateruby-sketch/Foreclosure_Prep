@@ -10,50 +10,6 @@ LOGO_DATA_URI = (
     + base64.b64encode(Path(__file__).with_name("logo.png").read_bytes()).decode("ascii")
 )
 
-OG_IMAGE_URL = "https://raw.githubusercontent.com/realestateruby-sketch/Foreclosure_Prep/main/logo.png"
-OG_SITE_URL = "https://foreclosureprep-production.up.railway.app/"
-OG_TITLE = "Foreclosure Prep"
-OG_DESCRIPTION = (
-    "Better data, faster decisions. Built for agents, investors, and "
-    "negotiators who work foreclosures."
-)
-
-
-def _patch_streamlit_index_for_og() -> None:
-    """Inject Open Graph + Twitter Card meta tags into Streamlit's index.html.
-
-    Streamlit serves a single static index.html for every route. We patch it
-    once at container startup so link-preview bots (Telegram, iMessage, Slack,
-    etc.) see proper OG tags instead of the bare default. Idempotent.
-    """
-    try:
-        import streamlit as _st_module
-        index_path = Path(_st_module.__file__).parent / "static" / "index.html"
-        if not index_path.exists():
-            return
-        html = index_path.read_text(encoding="utf-8")
-        if 'property="og:title"' in html:
-            return
-        og_block = (
-            f'    <meta property="og:title" content="{OG_TITLE}" />\n'
-            f'    <meta property="og:description" content="{OG_DESCRIPTION}" />\n'
-            f'    <meta property="og:image" content="{OG_IMAGE_URL}" />\n'
-            f'    <meta property="og:url" content="{OG_SITE_URL}" />\n'
-            f'    <meta property="og:type" content="website" />\n'
-            f'    <meta name="twitter:card" content="summary_large_image" />\n'
-            f'    <meta name="twitter:title" content="{OG_TITLE}" />\n'
-            f'    <meta name="twitter:description" content="{OG_DESCRIPTION}" />\n'
-            f'    <meta name="twitter:image" content="{OG_IMAGE_URL}" />\n'
-        )
-        html = html.replace("<head>", "<head>\n" + og_block, 1)
-        html = re.sub(r"<title>.*?</title>", f"<title>{OG_TITLE}</title>", html, count=1)
-        index_path.write_text(html, encoding="utf-8")
-    except Exception:
-        pass
-
-
-_patch_streamlit_index_for_og()
-
 st.set_page_config(
     page_title="Foreclosure Prep",
     page_icon="https://em-content.zobj.net/source/twitter/408/house_1f3e0.png",

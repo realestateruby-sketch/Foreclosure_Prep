@@ -1,7 +1,14 @@
 import streamlit as st
 import pandas as pd
 import re
+import base64
 from io import BytesIO
+from pathlib import Path
+
+LOGO_DATA_URI = (
+    "data:image/png;base64,"
+    + base64.b64encode(Path(__file__).with_name("logo.png").read_bytes()).decode("ascii")
+)
 
 st.set_page_config(
     page_title="Foreclosure Prep",
@@ -100,16 +107,9 @@ st.markdown("""
     .brand-icon {
         width: 52px;
         height: 52px;
-        background: linear-gradient(135deg, #A78BFA, #7C3AED);
         border-radius: 14px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-weight: 800;
-        font-size: 24px;
-        font-family: 'Inter', sans-serif;
         flex-shrink: 0;
+        object-fit: cover;
     }
 
     .brand-name {
@@ -651,10 +651,10 @@ if params.get("page") == "getstarted":
     st.session_state.page = "getstarted"
 
 def render_header():
-    st.markdown("""
+    st.markdown(f"""
     <div class="brand-header">
         <a class="brand-link" href="?page=home">
-            <div class="brand-icon">F</div>
+            <img class="brand-icon" src="{LOGO_DATA_URI}" alt="Foreclosure Prep" />
             <div class="brand-name">
                 <span class="dark">Foreclosure </span><span class="purple">Prep</span>
             </div>

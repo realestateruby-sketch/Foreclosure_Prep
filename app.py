@@ -467,7 +467,23 @@ CHFA_LENDER = "COLO HOUSING FIN AUTHORITY"
 DELETE_HEADERS_CONTAINS = [
     "TDD DATE", "TDR", "ERECOMLS", "ATTY", "LEGAL", "REC#", "BK", "PG", "DOC",
     "RECORDING", "Y=IND N=BUS", "PUBLIC TRUSTEE", "PARCEL NO", "OWNER OCC"
-]
+]COLUMN_RENAMES = {
+    "Cnty": "County",
+    "Orig Loan Amt": "Original Loan Amount",
+    "Loan Amt": "Loan Amount",
+}
+
+def apply_column_renames(df: pd.DataFrame) -> pd.DataFrame:
+    rename_map = {}
+    for col in df.columns:
+        col_upper = str(col).strip().upper()
+        if col in COLUMN_RENAMES:
+            rename_map[col] = COLUMN_RENAMES[col]
+        elif "PROPERTY ADDRESS" in col_upper:
+            rename_map[col] = "Street Address"
+        elif col_upper == "ST":
+            rename_map[col] = "State"
+    return df.rename(columns=rename_map)
 
 REQUIRED_COLUMNS = ["Orig Loan Amt", "Loan Amt", "Lender", "Cnty"]
 
@@ -650,11 +666,15 @@ def run_locked_pipeline(df: pd.DataFrame):
     bad += validate_difference(chfa_df)
     bad += sum(validate_difference(t) for t in county_tabs.values())
 
-    if bad > 0:
+        if bad > 0:
         raise RuntimeError(f"Validation failed: {bad} rows have incorrect Difference math.")
 
+    main_df = apply_column_renames(main_df)
+    if chfa_df is not None and not chfa_df.empty:
+        chfa_df = apply_column_renames(chfa_df)
+    county_tabs = {k: apply_column_renames(v) for k, v in county_tabs.items()}
+
     xlsx_bytes = write_multi_tab_xlsx(main_df, chfa_df, county_tabs)
-    return xlsx_bytes, main_df, chfa_df, county_tabs
 
 if "page" not in st.session_state:
     st.session_state.page = "home"

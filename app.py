@@ -467,7 +467,8 @@ CHFA_LENDER = "COLO HOUSING FIN AUTHORITY"
 DELETE_HEADERS_CONTAINS = [
     "TDD DATE", "TDR", "ERECOMLS", "ATTY", "LEGAL", "REC#", "BK", "PG", "DOC",
     "RECORDING", "Y=IND N=BUS", "PUBLIC TRUSTEE", "PARCEL NO", "OWNER OCC"
-]COLUMN_RENAMES = {
+]
+COLUMN_RENAMES = {
     "Cnty": "County",
     "Orig Loan Amt": "Original Loan Amount",
     "Loan Amt": "Loan Amount",

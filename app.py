@@ -676,7 +676,7 @@ def run_locked_pipeline(df: pd.DataFrame):
     county_tabs = {k: apply_column_renames(v) for k, v in county_tabs.items()}
 
     xlsx_bytes = write_multi_tab_xlsx(main_df, chfa_df, county_tabs)
-
+    return xlsx_bytes, main_df, chfa_df, county_tabs
 if "page" not in st.session_state:
     st.session_state.page = "home"
 

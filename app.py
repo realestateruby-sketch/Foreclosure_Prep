@@ -667,7 +667,7 @@ def run_locked_pipeline(df: pd.DataFrame):
     bad += validate_difference(chfa_df)
     bad += sum(validate_difference(t) for t in county_tabs.values())
 
-        if bad > 0:
+    if bad > 0:
         raise RuntimeError(f"Validation failed: {bad} rows have incorrect Difference math.")
 
     main_df = apply_column_renames(main_df)
